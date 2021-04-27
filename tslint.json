@@ -1,0 +1,22 @@
+{
+  "rules": {
+    "no-any": true,
+    "typedef": [
+      true,
+      "call-signature",
+      "arrow-call-signature",
+      "parameter",
+      "arrow-parameter",
+      "property-declaration",
+      "variable-declaration",
+      "member-variable-declaration",
+      "object-destructuring",
+      "array-destructuring"
+    ],
+    "quotemark": [true, "single"],
+    "no-magic-numbers": [true, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 100],
+    "strict-type-predicates": true,
+    "no-shadowed-variable": true,
+    "restrict-plus-operands": true
+  }
+}
