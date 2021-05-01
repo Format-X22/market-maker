@@ -1,0 +1,23 @@
+version: '2.1'
+services:
+  mercury-mongo:
+    container_name: mercury-mongo
+    image: mongo
+    restart: always
+    healthcheck:
+      test: mongo --eval 'db.getCollectionNames()'
+      interval: 10s
+      timeout: 2s
+      retries: 10
+    volumes:
+      - mercury-mongodb-vol:/data/db
+    ports:
+      - 127.0.0.1:27018:27017
+    networks:
+      - services-tier
+
+volumes:
+  mercury-mongodb-vol:
+
+networks:
+  services-tier:
