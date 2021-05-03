@@ -8,6 +8,12 @@ export class AppController {
     @Post('/sync')
     async sync(): Promise<string> {
         this.appService.sync();
-        return 'Started';
+        return 'Sync started';
+    }
+
+    @Post('/simulate')
+    async simulate(): Promise<string> {
+        this.appService.simulate();
+        return 'Simulator started';
     }
 }

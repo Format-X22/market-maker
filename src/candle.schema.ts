@@ -4,7 +4,7 @@ import { Document } from 'mongoose';
 import mongoose from 'mongoose';
 
 @Schema({ versionKey: false })
-export class Candles {
+export class Candle {
     @Prop({ unique: true })
     @ApiProperty()
     timestamp: number;
@@ -26,8 +26,8 @@ export class Candles {
     close: number;
 }
 
-export type CandlesDocument = Candles & Document;
-export const CandlesSchema: mongoose.Schema<CandlesDocument> = SchemaFactory.createForClass<
-    Candles,
-    CandlesDocument
->(Candles);
+export type CandleDocument = Candle & Document;
+export const CandleSchema: mongoose.Schema<CandleDocument> = SchemaFactory.createForClass<
+    Candle,
+    CandleDocument
+>(Candle);

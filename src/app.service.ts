@@ -4,21 +4,41 @@ import { Exchange, OHLCV } from 'ccxt';
 import * as moment from 'moment';
 import * as sleep from 'sleep-promise';
 import { Model } from 'mongoose';
-import { Candles, CandlesDocument } from './candles.schema';
+import { Candle, CandleDocument } from './candle.schema';
 import { InjectModel } from '@nestjs/mongoose';
 
 const CANDLES_LIMIT: number = 1000;
-const START: number = Number(moment('01.04.2021', 'DD.MM.YYYY'));
+const SYNC_START: number = Number(moment('01.04.2021', 'DD.MM.YYYY'));
+const CANDLE_SIZE_MINUTES: number = 5;
+const HOUR: number = 60;
+const HALF: number = 30;
+const FOURTH: number = 15;
+
+enum ETimeframe {
+    m15 = 'm15',
+    m30 = 'm30',
+    h1 = 'h1',
+    h2 = 'h2',
+    h4 = 'h4',
+}
+
+const PACK_BY_TIME: Record<ETimeframe, number> = {
+    [ETimeframe.m15]: FOURTH / CANDLE_SIZE_MINUTES,
+    [ETimeframe.m30]: HALF / CANDLE_SIZE_MINUTES,
+    [ETimeframe.h1]: HOUR / CANDLE_SIZE_MINUTES,
+    [ETimeframe.h2]: (HOUR * 2) / CANDLE_SIZE_MINUTES,
+    [ETimeframe.h4]: (HOUR * 4) / CANDLE_SIZE_MINUTES,
+};
 
 @Injectable()
 export class AppService {
     private readonly logger: Logger = new Logger(AppService.name);
     private readonly exchange: Exchange = new ccxt.bitmex();
 
-    constructor(@InjectModel(Candles.name) private CandlesModel: Model<CandlesDocument>) {}
+    constructor(@InjectModel(Candle.name) private CandleModel: Model<CandleDocument>) {}
 
     async sync(): Promise<void> {
-        let since: number = START;
+        let since: number = SYNC_START;
 
         while (true) {
             this.logger.log(`Load since ${moment(since)}`);
@@ -45,9 +65,18 @@ export class AppService {
         this.logger.log('Loaded');
     }
 
+    async simulate(): Promise<void> {
+        const candles: AsyncGenerator<Candle> = this.makeCandlesQueueBy(ETimeframe.m15);
+        // TODO -
+
+        for await (const candle of candles) {
+            // TODO -
+        }
+    }
+
     private async saveCandles(rawCandles: Array<OHLCV>): Promise<void> {
         for (const rawCandle of rawCandles) {
-            await this.CandlesModel.updateOne(
+            await this.CandleModel.updateOne(
                 { timestamp: rawCandle[0] },
                 {
                     timestamp: rawCandle[0],
@@ -59,5 +88,91 @@ export class AppService {
                 { upsert: true },
             );
         }
+    }
+
+    private async *makeCandlesQueueBy(timeframe: ETimeframe): AsyncGenerator<Candle> {
+        const pack: number = PACK_BY_TIME[timeframe];
+        const computedCandle: Candle = {
+            timestamp: 0,
+            open: 0,
+            high: 0,
+            low: Infinity,
+            close: 0,
+        };
+        let bufferedCount: number = 0;
+
+        for await (const candle of this.makeCandlesQueue()) {
+            bufferedCount++;
+
+            if (candle.high > computedCandle.high) {
+                computedCandle.high = candle.high;
+            }
+
+            if (candle.low < computedCandle.low) {
+                computedCandle.low = candle.low;
+            }
+
+            if (bufferedCount === 1) {
+                computedCandle.timestamp = candle.timestamp;
+                computedCandle.open = candle.open;
+            }
+
+            if (bufferedCount === pack) {
+                computedCandle.close = candle.close;
+
+                yield { ...computedCandle };
+
+                computedCandle.timestamp = 0;
+                computedCandle.open = 0;
+                computedCandle.high = 0;
+                computedCandle.low = Infinity;
+                computedCandle.close = 0;
+
+                bufferedCount = 0;
+            }
+        }
+    }
+
+    private async *makeCandlesQueue(): AsyncGenerator<Candle> {
+        const currentData: Array<Candle> = [];
+        let currentTimestamp: number = 0;
+
+        while (true) {
+            if (currentTimestamp === 0) {
+                currentData.push(...(await this.getCandles(currentTimestamp)));
+
+                if (!currentData.length) {
+                    throw new Error('Empty history?');
+                }
+            }
+
+            if (!currentData.length) {
+                currentData.push(...(await this.getCandles(currentTimestamp)));
+
+                if (!currentData.length) {
+                    break;
+                }
+            }
+
+            currentTimestamp = currentData[currentData.length - 1].timestamp;
+
+            while (true) {
+                if (!currentData.length) {
+                    break;
+                }
+
+                yield currentData.shift();
+            }
+        }
+    }
+
+    private async getCandles(after: number): Promise<Array<Candle>> {
+        const candles: Array<Candle> | null = await this.CandleModel.find(
+            { timestamp: { $gt: after } },
+            { _id: false },
+            { limit: CANDLES_LIMIT, sort: { timestamp: 1 } },
+        );
+
+        return candles || [];
     }
 }

@@ -3,7 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule, MongooseModuleOptions } from '@nestjs/mongoose';
-import { Candles, CandlesSchema } from './candles.schema';
+import { Candle, CandleSchema } from './candle.schema';
 
 @Module({
     imports: [
@@ -18,7 +18,7 @@ import { Candles, CandlesSchema } from './candles.schema';
             }),
             inject: [ConfigService],
         }),
-        MongooseModule.forFeature([{ name: Candles.name, schema: CandlesSchema }]),
+        MongooseModule.forFeature([{ name: Candle.name, schema: CandleSchema }]),
     ],
     controllers: [AppController],
     providers: [AppService],
