@@ -7,12 +7,38 @@ import { Model } from 'mongoose';
 import { Candle, CandleDocument } from './candle.schema';
 import { InjectModel } from '@nestjs/mongoose';
 
+type TOrder = {
+    price: number;
+    amount: number;
+    isStop: boolean;
+    cancelFor?: TOrder;
+    prev?: TOrder;
+    next?: TOrder;
+};
+type TOrderPack = {
+    upIn: TOrder;
+    upStop: TOrder;
+    downIn: TOrder;
+    downStop: TOrder;
+};
+type TOrderConfig = {
+    upEnterPadding: number;
+    downEnterPadding: number;
+    upStopPadding: number;
+    downStopPadding: number;
+    stopMove: number;
+    initialMargin: number;
+    maintenanceMargin: number;
+};
+type TGlass = Array<TOrder>;
+
 const CANDLES_LIMIT: number = 1000;
 const SYNC_START: number = Number(moment('01.04.2021', 'DD.MM.YYYY'));
 const CANDLE_SIZE_MINUTES: number = 5;
 const HOUR: number = 60;
 const HALF: number = 30;
 const FOURTH: number = 15;
+const START_AMOUNT: number = 100;
 
 enum ETimeframe {
     m15 = 'm15',
@@ -66,10 +92,26 @@ export class AppService {
     }
 
     async simulate(): Promise<void> {
-        const candles: AsyncGenerator<Candle> = this.makeCandlesQueueBy(ETimeframe.m15);
-        // TODO -
+        const candles: AsyncGenerator<Candle> = this.makeCandlesQueueBy(ETimeframe.h1);
+        const upGlass: TGlass = [];
+        const downGlass: TGlass = [];
+        const flowVolume: number = START_AMOUNT;
+
+        const orderConfig: TOrderConfig = {
+            upEnterPadding: 0.1,
+            downEnterPadding: 0.1,
+            upStopPadding: 9.5,
+            downStopPadding: 9.5,
+            stopMove: 0.5,
+            initialMargin: 1,
+            maintenanceMargin: 0.5,
+        };
 
         for await (const candle of candles) {
+            const orderPack: TOrderPack = this.makeOrders(candle, orderConfig, flowVolume);
+
+            this.pushToGlass(upGlass, downGlass, orderPack);
+
             // TODO -
         }
     }
@@ -174,5 +216,44 @@ export class AppService {
         );
 
         return candles || [];
+    }
+
+    private makeOrders(candle: Candle, orderConfig: TOrderConfig, flowVolume: number): TOrderPack {
+        const upIn: TOrder = {
+            price: this.round(candle.open * (1 + orderConfig.upEnterPadding / 100)),
+            amount: flowVolume,
+            isStop: false,
+        };
+        const upStop: TOrder = {
+            price: this.round(candle.open * (1 + orderConfig.upStopPadding / 100)),
+            amount: flowVolume,
+            isStop: true,
+        };
+        const downIn: TOrder = {
+            price: this.round(candle.open * (1 - orderConfig.downEnterPadding / 100)),
+            amount: flowVolume,
+            isStop: false,
+        };
+        const downStop: TOrder = {
+            price: this.round(candle.open * (1 - orderConfig.downStopPadding / 100)),
+            amount: flowVolume,
+            isStop: true,
+        };
+
+        upIn.cancelFor = downStop;
+        downIn.cancelFor = upStop;
+        upStop.cancelFor = downIn;
+        downStop.cancelFor = upIn;
+
+        return { upIn, upStop, downIn, downStop };
+    }
+
+    private pushToGlass(upGlass: TGlass, downGlass: TGlass, orderPack: TOrderPack): void {
+        // TODO -
+    }
+
+    private round(price: number): number {
+        // TODO -
+        return 0;
     }
 }
